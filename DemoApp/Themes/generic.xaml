@@ -1,0 +1,232 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:i="http://schemas.microsoft.com/expression/2010/interactivity"
+                    xmlns:viewmodels="clr-namespace:DemoApp.Implementations.Viewmodels"
+                    xmlns:behaviors="clr-namespace:DemoApp.ViewData.Behaviors"
+                    xmlns:treeView="clr-namespace:DemoApp.Implementations.Viewmodels.TreeView"
+                    xmlns:controls="clr-namespace:DemoApp.ViewData.Controls"
+                    xmlns:converters="clr-namespace:DemoApp.ViewData.Converters">
+
+    <DataTemplate DataType="{x:Type viewmodels:StartWindowViewModel}">
+        <DataTemplate.Resources>
+            <Style TargetType="{x:Type Button}">
+                <Setter Property="Margin"
+                        Value="0 2" />
+            </Style>
+        </DataTemplate.Resources>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="25" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="10" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="25" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="25" />
+            </Grid.ColumnDefinitions>
+            <Button Content="Create Virtual Drive"
+                    Command="{Binding CreateDriveCommand}"
+                    Grid.Column="1"
+                    Grid.Row="1" />
+            <Button Content="Open Virtual Drive"
+                    Command="{Binding OpenDriveCommand}"
+                    Grid.Column="1"
+                    Grid.Row="2" />
+            <Button Content="Exit"
+                    Command="{Binding ExitCommand}"
+                    Grid.Column="1"
+                    Grid.Row="3" />
+        </Grid>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type viewmodels:SearchViewModel}">
+        <DockPanel>
+            <Label Content="Search: "
+                   DockPanel.Dock="Left" />
+            <CheckBox Content="Recursive"
+                      DockPanel.Dock="Right"
+                      VerticalAlignment="Center"
+                      IsChecked="{Binding IsRecursive}"/>
+            <Button Content="Start"
+                    Command="{Binding StartSearchCommand}"
+                    DockPanel.Dock="Right" />
+            <TextBox Text="{Binding SearchPattern, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     DockPanel.Dock="Left"
+                     VerticalContentAlignment="Center"/>
+        </DockPanel>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type viewmodels:SearchResultViewModel}">
+        <ListView ItemsSource="{Binding Results}"
+                  SelectedItem="{Binding SelectedResult}">
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <Label Content="{Binding Name}" />
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type viewmodels:FileSystemViewModel}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="25" />
+                <RowDefinition />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="2*" />
+            </Grid.ColumnDefinitions>
+            
+            <ContentPresenter Grid.ColumnSpan="3"
+                              Content="{Binding SearchViewModel}"/>
+
+            <GridSplitter Grid.Column="1"
+                          Grid.Row="1"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Stretch"
+                          Background="Black"
+                          ShowsPreview="true"
+                          Width="2"
+                          Margin="0 8" />
+
+            <Grid Grid.Column="0"
+                  Grid.Row="1"
+                  Margin="8">
+                <ContentPresenter Content="{Binding TreeViewModel}" />
+            </Grid>
+            <Grid Grid.Column="2"
+                  Grid.Row="1"
+                  Margin="8">
+                <ContentPresenter Content="{Binding CurrentViewModel}" />
+            </Grid>
+        </Grid>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type viewmodels:EntityViewModel}">
+        <DataTemplate.Resources>
+            <converters:EntityTypeToStringConverter x:Key="EntityTypeToStringConverter" />
+        </DataTemplate.Resources>
+        <controls:EntityView EntityName="{Binding Name}"
+                             EntityType="{Binding Type, Converter={StaticResource EntityTypeToStringConverter}}"
+                             EntityEditableName="{Binding EditableName, Mode=TwoWay}"
+                             IsInRenameMode="{Binding IsRenaming, Mode=TwoWay}" />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type viewmodels:DirectoryViewModel}">
+        <Grid>
+            <ListView ItemsSource="{Binding NestedObjects}"
+                      SelectedItem="{Binding SelectedObject}"
+                      AllowDrop="True">
+                <ListView.InputBindings>
+                    <KeyBinding Command="{Binding PrimaryActionCommand}"
+                                Key="Enter" />
+                </ListView.InputBindings>
+                <i:Interaction.Behaviors>
+                    <behaviors:DropTargetBehavior FileDropCommand="{Binding DropFilesCommand}"
+                                                  ItemsDropCommand="{Binding DropItemsCommand}" />
+                    <behaviors:DragSourceBehavior />
+                    <behaviors:SelectedItemsSourceBehavior SelectedItems="{Binding SelectedObjects, Mode=TwoWay}" />
+                </i:Interaction.Behaviors>
+                <i:Interaction.Triggers>
+                    <i:EventTrigger EventName="MouseDoubleClick">
+                        <i:InvokeCommandAction Command="{Binding PrimaryActionCommand}" />
+                    </i:EventTrigger>
+                </i:Interaction.Triggers>
+                <ListView.ContextMenu>
+                    <ContextMenu>
+                        <ContextMenu.Items>
+                            <MenuItem Header="Copy"
+                                      Command="{Binding CopyCommand}" />
+                            <MenuItem Header="Cut"
+                                      Command="{Binding CutCommand}" />
+                            <MenuItem Header="Paste"
+                                      Command="{Binding PasteCommand}" />
+                            <MenuItem Header="Delete"
+                                      Command="{Binding DeleteCommand}" />
+                            <MenuItem Header="Rename"
+                                      Command="{Binding StartRenamingCommand}" />
+                            <Separator />
+                            <MenuItem Header="Create directory"
+                                      Command="{Binding CreateDirectoryCommand}" />
+                            <MenuItem Header="Create file"
+                                      Command="{Binding CreateFileCommand}" />
+                        </ContextMenu.Items>
+                    </ContextMenu>
+                </ListView.ContextMenu>
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <ContentPresenter Content="{Binding}" />
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type viewmodels:ProgressWindowViewModel}">
+        <Grid>
+            <ListView ItemsSource="{Binding Operations}"
+                      Background="Gray">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment"
+                                Value="Stretch" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel Background="White"
+                                   Margin="0 8">
+                            <DockPanel LastChildFill="False"
+                                       Margin="5">
+                                <DockPanel DockPanel.Dock="Top"
+                                           LastChildFill="False">
+                                    <Label Content="{Binding Message}" />
+                                </DockPanel>
+                                <DockPanel DockPanel.Dock="Top"
+                                           LastChildFill="False">
+                                    <Label>
+                                        <TextBlock>Progress: <TextBlock Text="{Binding Progress}" /> %</TextBlock>
+                                    </Label>
+                                </DockPanel>
+                                <DockPanel DockPanel.Dock="Bottom">
+                                    <Button Command="{Binding CancelCommand}"
+                                            Content="Cancel"
+                                            DockPanel.Dock="Right" />
+                                    <ProgressBar Maximum="100"
+                                                 Value="{Binding Progress}"
+                                                 DockPanel.Dock="Left" />
+                                </DockPanel>
+                            </DockPanel>
+                        </DockPanel>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type treeView:TreeViewViewModel}">
+        <TreeView ItemsSource="{Binding Directories}">
+            <TreeView.Resources>
+                <Style TargetType="{x:Type TreeViewItem}">
+                    <Setter Property="IsExpanded"
+                            Value="{Binding IsExpanded, Mode=TwoWay}">
+                    </Setter>
+                </Style>
+            </TreeView.Resources>
+            <i:Interaction.Behaviors>
+                <behaviors:SelectedItemSourceBehavior SelectedItem="{Binding SelectedItem, Mode=TwoWay}" />
+            </i:Interaction.Behaviors>
+            <TreeView.ItemTemplate>
+                <HierarchicalDataTemplate ItemsSource="{Binding NestedDirectories}">
+                    <Label Content="{Binding Name}" />
+                </HierarchicalDataTemplate>
+            </TreeView.ItemTemplate>
+        </TreeView>
+    </DataTemplate>
+
+</ResourceDictionary>
