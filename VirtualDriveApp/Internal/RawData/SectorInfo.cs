@@ -31,7 +31,7 @@ namespace VirtualDrive.Internal.RawData
 
         public static SectorInfo Read(byte[] bytes)
         {
-            if (bytes.Length != 21)//Block length should be 17 bytes (int + long + long + byte)
+            if (bytes.Length != 21)//Block length should be 21 bytes (int + long + long + byte)
                 throw new DataException($"Unable to read sector data: data length {bytes.Length}, expected: 21");
 
             return new SectorInfo
