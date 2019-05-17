@@ -33,7 +33,16 @@ namespace VirtualDrive.Internal.RawData
 
             synchronizer.DriveAccess.Wait();//wait for writing before initializing
 
-            retv.init();
+            try
+            {
+                retv.init();
+            }
+            catch (Exception e)
+            {
+                synchronizer.Dispose();
+                throw;
+            }
+
             var rootEntry = new DirectoryEntry
             {
                 Id = 0,
@@ -50,7 +59,17 @@ namespace VirtualDrive.Internal.RawData
         {
             var synchronizer = new DriveAccessSynchronizer(drive);
             var retv = new RawDataManager(synchronizer);
-            retv.init();
+
+            try
+            {
+                retv.init();
+            }
+            catch (Exception e)
+            {
+                synchronizer.Dispose();
+                throw;
+            }
+
             return retv;
         }
 
@@ -510,7 +529,7 @@ namespace VirtualDrive.Internal.RawData
                 return _driveParametersWriter.Write(bytes);
             }
         }
-        
+
         private WriteOperation removeFile(FileEntry entry)
         {
             SetFileLength(entry, 0);
@@ -521,7 +540,7 @@ namespace VirtualDrive.Internal.RawData
         {
             return eraseEntry(entry);
         }
-        
+
         private VirtualDriveParameters readParameters()
         {
             lock (_virtualDriveParametersLock)
@@ -581,8 +600,9 @@ namespace VirtualDrive.Internal.RawData
                 var removedBlocksLength = 0L;
                 DriveBlock getLastBlock()//just showing off that I know about local functions, but I don't like them
                 {
+                    var driveLength = _synchronizer.GetDriveLength();
                     return _contentWriter.AvailableBlocks.FirstOrDefault(x =>
-                        x.Position + x.Length + removedBlocksLength == _synchronizer.GetDriveLength());
+                        x.Position + x.Length + removedBlocksLength - driveLength >= 0);
                 }
 
                 var endPositionBlock = getLastBlock();
@@ -604,12 +624,12 @@ namespace VirtualDrive.Internal.RawData
                 var operation = new FileTableOperation(drive =>
                 {
                     drive.Position = 0;
-                    drive.SetLength(drive.Length - removedBlocksLength);
+                    drive.SetLength(_currentContentSector.StartPosition + _contentWriter.Length);
                     return removedBlocksLength;
                 }, 0);
 
                 _synchronizer.EnqueueOperation(operation);
-                return operation;
+                return sectorOperation;
             }
         }
 

@@ -46,6 +46,7 @@
     <Compile Include="DirectoryEventArgs.cs" />
     <Compile Include="Extensions\VirtualFileExtensions.cs" />
     <Compile Include="FileEventArgs.cs" />
+    <Compile Include="Internal\Drive\Operations\DriveOperation.cs" />
     <Compile Include="Internal\ImportProgressArgs.cs" />
     <Compile Include="Internal\BaseEntry.cs" />
     <Compile Include="Internal\BufferHelper.cs" />

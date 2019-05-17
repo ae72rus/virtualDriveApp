@@ -22,11 +22,15 @@ namespace VirtualDrive.Internal.RawData.Writers
             return new FileTableOperation(drive => drive.Write(position, bytes), position);
         }
 
-        public BaseDriveOperation SetContentSectorLength(long sectorRegionDataStartPosition, long sectorLength)
+        public WriteOperation SetContentSectorLength(long sectorRegionDataStartPosition, long sectorLength)
         {
             var position = sectorRegionDataStartPosition + ByteHelper.GetLength<int>() + ByteHelper.GetLength<long>();
             var bytes = BitConverter.GetBytes(sectorLength);
-            var operation = new FileTableOperation(drive => drive.Write(position, bytes), position);
+            var operation = new FileTableOperation(drive =>
+            {
+                var retv = drive.Write(position, bytes);
+                return retv;
+            }, position);
             Synchronizer.EnqueueOperation(operation);
             return operation;
         }

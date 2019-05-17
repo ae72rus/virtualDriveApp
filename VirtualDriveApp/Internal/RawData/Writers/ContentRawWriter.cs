@@ -38,6 +38,9 @@ namespace VirtualDrive.Internal.RawData.Writers
 
         public void SetLength(long length)
         {
+            if (CurrentPosition == Length)
+                CurrentPosition = length;
+
             Length = length;
         }
 
