@@ -114,7 +114,7 @@ namespace VirtualDrive.Internal.Drive
 
         internal int Write(byte[] data)
         {
-            return Write(Length, data);
+            return Write(Position, data);
         }
 
         public new void Dispose()

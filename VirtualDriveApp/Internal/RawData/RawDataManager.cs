@@ -37,7 +37,7 @@ namespace VirtualDrive.Internal.RawData
             {
                 retv.init();
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 synchronizer.Dispose();
                 throw;
@@ -117,6 +117,9 @@ namespace VirtualDrive.Internal.RawData
                     }
                 }
 
+                if (_currentFileEntriesSector == null || _currentContentSector == null)
+                    throw new Exception("Sectors read error");
+
                 var entriesStartPosition = _currentFileEntriesSector.StartPosition;
                 _entryWriter = new EntryRawWriter(_parameters, _synchronizer, entriesStartPosition);
 
@@ -162,7 +165,7 @@ namespace VirtualDrive.Internal.RawData
 
 
             if (fileEntry.FileLength - (filePosition + count) < 0)
-                SetFileLength(fileEntry, filePosition + count).Task.Wait();
+                SetFileLength(fileEntry, filePosition + count);
 
             var bytesToWrite = count;
             var currentFilePosition = 0L;
@@ -201,12 +204,9 @@ namespace VirtualDrive.Internal.RawData
 
         public IEnumerable<BaseEntry> ReadEntries()
         {
-            if (_isDisposing)
-                yield break;
-
             lock (_entriesTableLock)
             {
-                var buffer = new byte[4096];
+                var buffer = new byte[1024 * 1024];
                 var breakReading = false;
                 foreach (var sectorInfo in _sectorInfosStartPositions.Keys)
                 {
@@ -248,11 +248,12 @@ namespace VirtualDrive.Internal.RawData
                             var entry = entryReader.GetEntry<BaseEntry>();
                             yield return entry;
                         }
-                        else _entryWriter.AddAvailableBlock(new DriveBlock
-                        {
-                            Length = blockLength,
-                            Position = blockBodyPosition - ByteHelper.GetLength<int>() //position where length bytes are located
-                        });
+                        else
+                            _entryWriter.AddAvailableBlock(new DriveBlock
+                            {
+                                Length = blockLength,
+                                Position = blockBodyPosition - ByteHelper.GetLength<int>() //position where length bytes are located
+                            });
 
                         _entryWriter.SetCurrentPosition(reader.CurrentPosition);//set position just after the last entry
 
@@ -321,7 +322,7 @@ namespace VirtualDrive.Internal.RawData
             if (fileEntry.FileLength == length)
                 return WriteOperation.Empty;
 
-            eraseEntry(fileEntry);
+            eraseEntry(fileEntry).Task.Wait();
 
             if (length == 0)
             {
@@ -329,9 +330,8 @@ namespace VirtualDrive.Internal.RawData
                     _contentWriter.AddAvailableBlock(block);
 
                 fileEntry.Blocks.Clear();
-
-                _entryWriter.Write(fileEntry.GetBytes()).Task.Wait();
-                return shrinkDrive();
+                
+                return writeEntry(fileEntry);
             }
 
             if (fileEntry.FileLength > length)
@@ -532,7 +532,7 @@ namespace VirtualDrive.Internal.RawData
 
         private WriteOperation removeFile(FileEntry entry)
         {
-            SetFileLength(entry, 0);
+            SetFileLength(entry, 0).Task.Wait();
             return eraseEntry(entry);
         }
 
@@ -592,11 +592,12 @@ namespace VirtualDrive.Internal.RawData
         /// <summary>
         /// Removes empty blocks at the end of the drive
         /// </summary>
-        /// <returns>BaseDriveOperation</returns>
-        private WriteOperation shrinkDrive()
+        private void trimDrive()
         {
             lock (_contentLock)
             {
+                _synchronizer.DriveAccess.Wait();
+
                 var removedBlocksLength = 0L;
                 DriveBlock getLastBlock()//just showing off that I know about local functions, but I don't like them
                 {
@@ -615,22 +616,96 @@ namespace VirtualDrive.Internal.RawData
                 }
 
                 if (removedBlocksLength == 0)
-                    return WriteOperation.Empty;
+                    return;
                 _contentWriter.SetLength(_contentWriter.Length - removedBlocksLength);
                 var sectorOperation = _sectorInfoWriter.SetContentSectorLength(_sectorInfosStartPositions[_currentContentSector], _contentWriter.Length);
                 _synchronizer.EnqueueOperation(sectorOperation);
-                sectorOperation.Task.Wait();
 
-                var operation = new FileTableOperation(drive =>
+                _synchronizer.EnqueueOperation(drive =>
                 {
                     drive.Position = 0;
                     drive.SetLength(_currentContentSector.StartPosition + _contentWriter.Length);
-                    return removedBlocksLength;
-                }, 0);
-
-                _synchronizer.EnqueueOperation(operation);
-                return sectorOperation;
+                }, OperationType.FileTable);
             }
+        }
+
+        /// <summary>
+        /// Get rid of content fragmentation
+        /// </summary>
+        private void shrinkDrive()
+        {
+            lock (_contentLock)
+                lock (_entriesTableLock)
+                {
+                    _synchronizer.DriveAccess.Wait();
+                    var aggregatedDifference = 0L;
+                    var previousEndPosition = -1L;
+                    var firstEndPosition = -1L;
+                    var diffDict = new Dictionary<long, long>(); //key: position, value: shift
+                    foreach (var availableBlock in _contentWriter.AvailableBlocks.OrderBy(x => x.Position))
+                    {
+                        if (previousEndPosition != -1)
+                            for (var i = previousEndPosition; i < availableBlock.Position; i++)
+                                diffDict[i] = aggregatedDifference;
+
+                        previousEndPosition = availableBlock.Position + availableBlock.Length;
+                        if (firstEndPosition == -1)
+                            firstEndPosition = previousEndPosition;
+
+                        aggregatedDifference += availableBlock.Length;
+                    }
+
+                    if (aggregatedDifference == 0)
+                        return;
+
+                    var files = ReadEntries().OfType<FileEntry>()
+                        .Where(x => x.Blocks.Any(b => b.Position >= firstEndPosition)).ToList();
+
+                    _synchronizer.EnqueueOperation(drive =>
+                    {
+                        foreach (var file in files)
+                        {
+                            var fileChanged = false;
+                            foreach (var block in file.Blocks)
+                            {
+                                if (block.Position > previousEndPosition && !diffDict.ContainsKey(block.Position))
+                                    continue;
+
+                                var shift = diffDict.ContainsKey(block.Position)
+                                    ? diffDict[block.Position]
+                                    : aggregatedDifference;
+
+                                drive.Position = block.Position;
+                                var buffer = BufferHelper.GetBuffer(drive);
+                                var bytesToMove = block.Length;
+                                while (bytesToMove > 0)
+                                {
+                                    drive.Position = block.Position + block.Length - bytesToMove;
+                                    if (drive.Position == drive.Length)
+                                        break;
+
+                                    var readBytes = drive.Read(buffer, 0, bytesToMove > buffer.Length ? buffer.Length : bytesToMove);
+
+                                    drive.Position = block.Position + block.Length - bytesToMove - shift;
+                                    drive.Write(buffer, 0, readBytes);
+                                    bytesToMove -= readBytes;
+                                }
+
+                                block.Position -= shift;
+                                fileChanged = true;
+                            }
+
+                            if (!fileChanged)
+                                continue;
+
+                            eraseEntry(file);
+                            writeEntry(file);
+                        }
+
+                        drive.SetLength(drive.Length - aggregatedDifference);
+
+                    }, OperationType.FileTable);
+                }
         }
 
         private IEnumerable<DriveBlock> readAvailableContentBlocks()
@@ -649,12 +724,14 @@ namespace VirtualDrive.Internal.RawData
 
                     var infoLength = BitConverter.ToInt32(buffer, 0);
                     if (infoLength <= 0)
-                        return new byte[0];
+                        buffer = new byte[0];
+                    else
+                    {
+                        buffer = new byte[infoLength];
 
-                    buffer = new byte[infoLength];
-
-                    drive.Position = drive.Length - ByteHelper.GetLength<int>() * 2 - infoLength;
-                    drive.Read(buffer, 0, infoLength);
+                        drive.Position = drive.Length - ByteHelper.GetLength<int>() * 2 - infoLength;
+                        drive.Read(buffer, 0, infoLength);
+                    }
 
                     drive.SetLength(drive.Length - infoLength - ByteHelper.GetLength<int>() * 2); //get rid of available blocks info
                     return buffer;
@@ -781,7 +858,6 @@ namespace VirtualDrive.Internal.RawData
                 }, -1);
 
                 _synchronizer.EnqueueOperation(operation);
-                operation.Task.Wait();
             }
         }
 
@@ -792,6 +868,8 @@ namespace VirtualDrive.Internal.RawData
 
             _isDisposing = true;
 
+            trimDrive();
+            shrinkDrive();
             writeAvailableContentBlocks();
             _synchronizer.Dispose();
         }

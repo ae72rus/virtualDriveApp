@@ -576,7 +576,6 @@ namespace VirtualDrive.Internal
 
         private void remove(FileEntry entry)
         {
-            _rawDataManager.SetFileLength(entry, 0);
             Indexer.RemoveEntry(entry);
             Cache.Files.Remove(entry.Id);
             Cache.FileNames.Remove(entry.Id);

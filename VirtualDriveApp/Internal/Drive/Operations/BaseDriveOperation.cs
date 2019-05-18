@@ -6,6 +6,6 @@ namespace VirtualDrive.Internal.Drive.Operations
     {
         public Task Task { get; protected set; }
         public OperationType Type { get; protected set; }
-        public abstract Task Run(VirtualDrive drive, TaskScheduler scheduler);
+        public abstract Task Run(VirtualDrive drive);
     }
 }

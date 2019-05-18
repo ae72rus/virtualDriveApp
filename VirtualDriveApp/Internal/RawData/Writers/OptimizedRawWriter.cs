@@ -51,28 +51,24 @@ namespace VirtualDrive.Internal.RawData.Writers
             var retv = -1L;
             lock (_blocksLockObject)
             {
-                if (!_availableBlocks.TryGetValue(length, out var queue))
+                if (!TryGetAvailableBlock(length, out var block))
                     retv = CurrentPosition;
                 else
                 {
                     contentHint.IsExistingBlockUsed = true;
-                    var block = queue.Dequeue();
                     retv = block.Position;
 
-                    if (block.Length > length)
+                    if (block.Length <= length)
+                        return retv;
+
+                    var generatedBlock = new DriveBlock
                     {
-                        var generatedBlock = new DriveBlock
-                        {
-                            Length = block.Length - length,
-                            Position = block.Position + length
-                        };
+                        Length = block.Length - length,
+                        Position = block.Position + length
+                    };
 
-                        AddAvailableBlock(generatedBlock);
-                        contentHint.GeneratedAvailableBlock = generatedBlock;
-                    }
-
-                    if (!queue.Any())
-                        _availableBlocks.Remove(length);
+                    AddAvailableBlock(generatedBlock);
+                    contentHint.GeneratedAvailableBlock = generatedBlock;
                 }
             }
 
@@ -84,8 +80,15 @@ namespace VirtualDrive.Internal.RawData.Writers
             lock (_blocksLockObject)
             {
                 block = null;
-                if (!_availableBlocks.TryGetValue(length, out var queue))
+                if (!_availableBlocks.TryGetValue(length, out var queue) ||
+                    _availableBlocks.Keys.All(x => x < length)) 
                     return false;
+
+                if (queue == null)
+                {
+                    var key = _availableBlocks.Keys.FirstOrDefault(x => x > length);
+                    queue = _availableBlocks[key];
+                }
 
                 block = queue.Dequeue();
 

@@ -22,11 +22,11 @@ namespace VirtualDrive.Internal.Drive.Operations
             Task = new Task(() => operationAction.Invoke(GetDrive?.Invoke(), cancellationToken), cancellationToken, TaskCreationOptions.LongRunning);
         }
 
-        public override Task Run(VirtualDrive drive, TaskScheduler scheduler)
+        public override Task Run(VirtualDrive drive)
         {
             GetDrive = () => drive;
             if (Task.Status == TaskStatus.Created)
-                Task.Start(scheduler);
+                Task.Start();
             return Task;
         }
     }

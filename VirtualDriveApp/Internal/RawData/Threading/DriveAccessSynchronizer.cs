@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Threading.Tasks;
 using VirtualDrive.Internal.Drive.Operations;
 
@@ -24,6 +25,9 @@ namespace VirtualDrive.Internal.RawData.Threading
 
         private async Task runOperations()
         {
+            if(!_highPriorityOperations.Any() && !_lowPriorityOperations.Any())
+                return;
+
             await runHighPriorityOperations();
             await runLowPriorityOperations();
         }
@@ -45,7 +49,7 @@ namespace VirtualDrive.Internal.RawData.Threading
             }
 
             lock (_driveAccessLock)
-                DriveAccess = DriveAccess.ContinueWith(t => runOperations().Wait());
+                DriveAccess = DriveAccess.ContinueWith(t => runOperations()).Unwrap();
         }
 
         public DriveOperation EnqueueOperation(Action<Drive.VirtualDrive> driveAction, OperationType type)
@@ -62,34 +66,25 @@ namespace VirtualDrive.Internal.RawData.Threading
             return operation;
         }
 
-        private async Task<bool> runHighPriorityOperations()
+        private async Task runHighPriorityOperations()
         {
-            var success = false;
             while (_highPriorityOperations.TryDequeue(out var op))
-            {
-                success = true;
                 await runOperation(op);
-            }
-
-            return success;
         }
 
-        private async Task<bool> runLowPriorityOperations()
+        private async Task runLowPriorityOperations()
         {
-            var success = await runHighPriorityOperations();
+            await runHighPriorityOperations();
             while (_lowPriorityOperations.TryDequeue(out var op))
             {
                 await runHighPriorityOperations();
-                success = true;
                 await runOperation(op);
             }
-
-            return success;
         }
 
         private async Task runOperation(BaseDriveOperation operation)
         {
-            var task = operation.Run(_drive, TaskScheduler.Current);
+            var task = operation.Run(_drive);
             await task;
         }
 
@@ -99,8 +94,7 @@ namespace VirtualDrive.Internal.RawData.Threading
                 return;
 
             _isDisposing = true;
-            DriveAccess.Wait();
-            _drive?.Dispose();
+            DriveAccess.ContinueWith(x => _drive?.Dispose()).Wait();
         }
     }
 }

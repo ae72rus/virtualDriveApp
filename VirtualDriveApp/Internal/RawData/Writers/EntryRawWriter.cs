@@ -15,7 +15,7 @@ namespace VirtualDrive.Internal.RawData.Writers
 
         public void SetCurrentPosition(long position)
         {
-            if(position > Length)
+            if (position > Length)
                 throw new AccessViolationException("Attempt to access protected memory occured");
 
             CurrentPosition = position;
@@ -47,8 +47,12 @@ namespace VirtualDrive.Internal.RawData.Writers
 
             var operation = new FileTableOperation(drive => drive.Write(block.Position, bytesList.ToArray()), block.Position);
             Synchronizer.EnqueueOperation(operation);
-            operation.Task.Wait();
             return true;
+        }
+
+        protected override bool TryGetAvailableBlock(int length, out DriveBlock block)
+        {
+            return base.TryGetAvailableBlock(length, out block) && block.Length >= 42;
         }
 
         protected override WriteOperation MakeOperation(OperationHint hint, byte[] bytes, long position)
