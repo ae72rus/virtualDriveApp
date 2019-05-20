@@ -352,7 +352,7 @@ namespace VirtualDrive.Internal
                 return;
 
             Indexer.TryGetParentDirectory(fileEntry, out var parentDirectoryEntry);
-            if (getDirectoryFiles(parentDirectoryEntry, false, name).Any())
+            if (getDirectoryFiles(parentDirectoryEntry, false, makeRegexPattern(name)).Any())
                 throw new InvalidOperationException($"Item with the same name exists in the directory {GetDirectoryName(parentDirectoryEntry.Id)}");
 
             using (_locker.LockWriting(fileEntry))
@@ -384,7 +384,7 @@ namespace VirtualDrive.Internal
                 return;
 
             Indexer.TryGetParentDirectory(directoryEntry, out var parentDirectoryEntry);
-            if (getNestedDirecories(parentDirectoryEntry, false, name).Any())
+            if (getNestedDirecories(parentDirectoryEntry, false, makeRegexPattern(name)).Any())
                 throw new InvalidOperationException($"Item with the same name exists in the directory {GetDirectoryName(parentDirectoryEntry.Id)}");
 
             if (!_locker.TryLockWriting(directoryEntry, out var operation))
@@ -523,7 +523,7 @@ namespace VirtualDrive.Internal
         private T createVirtualEntity<T>(VirtualDirectory parentDirectory, string name)
             where T : BaseVirtualEntity
         {//todo: refactoring required
-            Func<DirectoryEntry, string, IEnumerable<BaseEntry>> getInnerEntities;
+            Func<DirectoryEntry, Regex, IEnumerable<BaseEntry>> getInnerEntities;
             Func<long> getNewEntryId;
             Func<BaseEntry> createEntry;
             Func<long, T> getVirtualEntry;
@@ -563,7 +563,7 @@ namespace VirtualDrive.Internal
             else
                 throw new InvalidOperationException();
 
-            var innerEntities = getInnerEntities(parentDirectoryEntry, name);
+            var innerEntities = getInnerEntities(parentDirectoryEntry, makeRegexPattern(name));
             if (innerEntities.Any())
                 throw new InvalidOperationException($"Item with the same name exists in the directory {GetDirectoryName(parentDirectoryEntry.Id)}");
 
@@ -685,7 +685,7 @@ namespace VirtualDrive.Internal
             return getNestedDirecories(directory, recursive, searchPattern).Select(x => getVirtualDirectory(x.Id));
         }
 
-        private IEnumerable<FileEntry> getDirectoryFiles(DirectoryEntry directoryEntry, bool recursive, string searchPattern)
+        private IEnumerable<FileEntry> getDirectoryFiles(DirectoryEntry directoryEntry, bool recursive, Regex searchPattern)
         {
             var dirsQueue = new Queue<DirectoryEntry>(new[] { directoryEntry });
             while (dirsQueue.Any())
@@ -708,7 +708,7 @@ namespace VirtualDrive.Internal
             }
         }
 
-        private IEnumerable<DirectoryEntry> getNestedDirecories(DirectoryEntry directoryEntry, bool recursive, string searchPattern)
+        private IEnumerable<DirectoryEntry> getNestedDirecories(DirectoryEntry directoryEntry, bool recursive, Regex searchPattern)
         {
             var dirsQueue = new Queue<DirectoryEntry>(new[] { directoryEntry });
             while (dirsQueue.Any())
@@ -729,13 +729,12 @@ namespace VirtualDrive.Internal
             }
         }
 
-        private bool checkSearchPatternMatch(string fileName, string searchPattern)
+        private bool checkSearchPatternMatch(string fileName, Regex searchPattern)
         {
-            return string.IsNullOrWhiteSpace(searchPattern)
-                   || Regex.Match(fileName, searchPattern, RegexOptions.Singleline | RegexOptions.IgnoreCase).Success;
+            return searchPattern?.IsMatch(fileName) ?? true;
         }
 
-        private string makeRegexPattern(string searchString)
+        private Regex makeRegexPattern(string searchString)
         {
             if (string.IsNullOrWhiteSpace(searchString))
                 return null;
@@ -752,7 +751,8 @@ namespace VirtualDrive.Internal
                     patternBuilder.Append(c);
             }
 
-            return patternBuilder.ToString();
+            var retv = new Regex(patternBuilder.ToString(), RegexOptions.IgnoreCase|RegexOptions.Singleline);
+            return retv;
         }
 
         private VirtualFile getVirtualFile(long id)

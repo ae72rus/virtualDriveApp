@@ -172,7 +172,7 @@ namespace VirtualDrive.Internal
 
         public async Task ImportDirectory(DirectoryInfo source, string targetDirectoryPath, Action<ProgressArgs> progressCallback, CancellationToken cancellationToken)
         {
-            if(source == null)
+            if (source == null)
                 throw new ArgumentNullException(nameof(source));
 
             var targetDirectory = getDirectoryFromPath(targetDirectoryPath);
@@ -322,7 +322,7 @@ namespace VirtualDrive.Internal
             {
                 currentDirectory = currentDirectory.GetDirectories(false, p).FirstOrDefault();
                 if (currentDirectory == null)
-                    throw new DirectoryNotFoundException(path);
+                    throw new DirectoryNotFoundException($"{path}, {p}");
             }
 
             return currentDirectory?.Id ?? throw new DirectoryNotFoundException(path);
