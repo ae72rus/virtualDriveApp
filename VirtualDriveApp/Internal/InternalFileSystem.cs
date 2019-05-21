@@ -90,7 +90,7 @@ namespace VirtualDrive.Internal
         public async Task<VirtualFile> MoveFile(VirtualFile file, VirtualDirectory targetDirectory, Action<ProgressArgs> progressCallback, CancellationToken cancellationToken)
         {
             if (targetDirectory.FileSystem != this)
-                return await CopyFile(file, targetDirectory, args => progressCallback?.Invoke(new MoveProgressArgs(args.Progress, args.Message) { Operation = Operation.Moving }), cancellationToken).ConfigureAwait(false);
+                return await CopyFile(file, targetDirectory, args => progressCallback?.Invoke(new MoveProgressArgs(args.Progress, args.Message) { Operation = Operation.Moving }), cancellationToken);
 
             var fileEntry = getFileEntry(file);
             var oldParentDirectory = getVirtualDirectory(fileEntry.DirectoryId);
@@ -139,7 +139,7 @@ namespace VirtualDrive.Internal
                     {
                         var count = (int)(restBytes > buffer.Length ? buffer.Length : restBytes);
                         var read = await sourceFileStream.ReadAsync(buffer, 0, count, cancellationToken);
-                        await newFileStream.WriteAsync(buffer, 0, count, cancellationToken).ConfigureAwait(false);
+                        await newFileStream.WriteAsync(buffer, 0, count, cancellationToken);
                         restBytes -= read;
                     }
                     catch (TaskCanceledException)
@@ -180,7 +180,7 @@ namespace VirtualDrive.Internal
                 return await CopyDirectory(directory, target, args => progressCallback?.Invoke(new MoveProgressArgs(args.Progress, args.Message)
                 {
                     Operation = Operation.Moving
-                }), cancellationToken).ConfigureAwait(false);
+                }), cancellationToken);
             }
 
             var dirEntry = getDirectoryEntry(directory);
@@ -251,7 +251,7 @@ namespace VirtualDrive.Internal
                     {
                         var progress = (float)args.Progress * processedFilesLocal / totalFilesLocal * 100;
                         progressCallback?.Invoke(new CopyProgressArgs((int)progress, args.Message) { Operation = Operation.Copying });
-                    }, cancellationToken).ConfigureAwait(false);
+                    }, cancellationToken);
                 }
             }
 
