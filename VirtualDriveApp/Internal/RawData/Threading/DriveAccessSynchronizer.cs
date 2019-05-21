@@ -94,7 +94,15 @@ namespace VirtualDrive.Internal.RawData.Threading
                 return;
 
             _isDisposing = true;
-            DriveAccess.ContinueWith(x => _drive?.Dispose()).Wait();
+
+            try
+            {
+                DriveAccess.ContinueWith(x => _drive?.Dispose()).Wait();
+            }
+            finally
+            {
+                _drive?.Dispose();
+            }
         }
     }
 }

@@ -222,6 +222,7 @@ namespace VirtualDrive.Internal.RawData
                         var readBlockBytesCount = 0L;
                         var block = new byte[blockLength];
                         var blockBodyPosition = reader.CurrentPosition;
+                        var blockStartPosition = blockBodyPosition - ByteHelper.GetLength<int>();
 
                         while (readBlockBytesCount < blockLength)//in case if block longer than buffer
                         {
@@ -233,16 +234,14 @@ namespace VirtualDrive.Internal.RawData
                             }
 
                             var readBytesCount = reader.Read(buffer, 0, bytesToRead).Task.Result;
-                            for (var i = readBlockBytesCount; i < readBlockBytesCount + readBytesCount; i++)
-                                block[i] = buffer[i - readBlockBytesCount];
-
+                            Array.Copy(buffer, 0, block, readBlockBytesCount, readBlockBytesCount + readBytesCount);
                             readBlockBytesCount += readBytesCount;
                         }
 
                         if (breakReading)
                             break;
 
-                        var entryReader = EntryReaderFactory.Create(block.ToArray(), blockBodyPosition - ByteHelper.GetLength<int>());//it requires position of length bytes
+                        var entryReader = EntryReaderFactory.Create(block, blockStartPosition);//it requires position of length bytes
                         if (entryReader != null)
                         {
                             var entry = entryReader.GetEntry<BaseEntry>();
@@ -252,7 +251,7 @@ namespace VirtualDrive.Internal.RawData
                             _entryWriter.AddAvailableBlock(new DriveBlock
                             {
                                 Length = blockLength,
-                                Position = blockBodyPosition - ByteHelper.GetLength<int>() //position where length bytes are located
+                                Position = blockStartPosition //position where length bytes are located
                             });
 
                         _entryWriter.SetCurrentPosition(reader.CurrentPosition);//set position just after the last entry
@@ -599,7 +598,7 @@ namespace VirtualDrive.Internal.RawData
                 _synchronizer.DriveAccess.Wait();
 
                 var removedBlocksLength = 0L;
-                DriveBlock getLastBlock()//just showing off that I know about local functions, but I don't like them
+                DriveBlock getLastBlock()
                 {
                     var driveLength = _synchronizer.GetDriveLength();
                     return _contentWriter.AvailableBlocks.FirstOrDefault(x =>
@@ -868,10 +867,16 @@ namespace VirtualDrive.Internal.RawData
 
             _isDisposing = true;
 
-            trimDrive();
-            shrinkDrive();
-            writeAvailableContentBlocks();
-            _synchronizer.Dispose();
+            try
+            {
+                trimDrive();
+                shrinkDrive();
+                writeAvailableContentBlocks();
+            }
+            finally
+            {
+                _synchronizer.Dispose();
+            }
         }
     }
 }
